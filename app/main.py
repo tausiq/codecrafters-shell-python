@@ -1,4 +1,6 @@
 import sys
+import os
+import shutil
 
 
 def main():
@@ -18,12 +20,17 @@ def main():
             # Print the message
             print(message)
         elif command.startswith('type'):
-            command = command[5:]
-            # Check if the command is "exit"
-            if command == 'echo' or command == 'exit' or command == 'type':
-                print(f"{command} is a shell builtin")
-            else: 
-                print(f"{command}: not found")
+            cmd_to_check = command[5:].strip()
+            # Check if the command is a shell builtin
+            if cmd_to_check in ['echo', 'exit', 'type']:
+                print(f"{cmd_to_check} is a shell builtin")
+            else:
+                # Look for the command in PATH directories
+                cmd_path = shutil.which(cmd_to_check)
+                if cmd_path:
+                    print(f"{cmd_to_check} is {cmd_path}")
+                else:
+                    print(f"{cmd_to_check}: not found")
         else: 
             print(f"{command}: command not found")
 
