@@ -1,6 +1,7 @@
 import sys
 import os
 import shutil
+import subprocess
 
 
 def main():
@@ -32,7 +33,26 @@ def main():
                 else:
                     print(f"{cmd_to_check}: not found")
         else: 
-            print(f"{command}: command not found")
+            # Parse command and arguments
+            command_parts = command.strip().split()
+
+            # Try to execute the command as an external program
+            program = command_parts[0]
+            args = command_parts[1:]
+
+            try:
+                # Execute the command and capture output
+                result = subprocess.run([program] + args, capture_output=True, text=True)
+                
+                # Print stdout
+                if result.stdout:
+                    print(result.stdout.rstrip())
+                
+                # Print stderr to stderr
+                if result.stderr:
+                    print(result.stderr.rstrip(), file=sys.stderr)
+            except Exception as e:
+                print(f"{command}: command not found")
 
 
 if __name__ == "__main__":
