@@ -34,6 +34,14 @@ def main():
                     print(f"{cmd_to_check}: not found")
         elif command == "pwd":
             print(os.getcwd())
+        elif command.startswith('cd'):
+            # Extract the directory to change to
+            dir_to_change = command[3:].strip()
+            # Change the current working directory
+            try:
+                os.chdir(dir_to_change)
+            except FileNotFoundError:
+                print(f"cd: {dir_to_change}: No such file or directory")
         else: 
             # Parse command and arguments
             command_parts = command.strip().split()
