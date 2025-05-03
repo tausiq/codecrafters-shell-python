@@ -12,8 +12,13 @@ def main():
         # Check if the command is "exit"
         if command == "exit 0":
             break 
-
-        print(f"{command}: command not found")
+        elif command.startswith('echo'):
+            # Extract the message to echo
+            message = command[5:]
+            # Print the message
+            print(message)
+        else: 
+            print(f"{command}: command not found")
 
 
 if __name__ == "__main__":
