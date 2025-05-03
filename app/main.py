@@ -23,7 +23,7 @@ def main():
         elif command.startswith('type'):
             cmd_to_check = command[5:].strip()
             # Check if the command is a shell builtin
-            if cmd_to_check in ['echo', 'exit', 'type']:
+            if cmd_to_check in ['echo', 'exit', 'type', 'pwd']:
                 print(f"{cmd_to_check} is a shell builtin")
             else:
                 # Look for the command in PATH directories
@@ -32,6 +32,8 @@ def main():
                     print(f"{cmd_to_check} is {cmd_path}")
                 else:
                     print(f"{cmd_to_check}: not found")
+        elif command == "pwd":
+            print(os.getcwd())
         else: 
             # Parse command and arguments
             command_parts = command.strip().split()
@@ -47,10 +49,6 @@ def main():
                 # Print stdout
                 if result.stdout:
                     print(result.stdout.rstrip())
-                
-                # Print stderr to stderr
-                if result.stderr:
-                    print(result.stderr.rstrip(), file=sys.stderr)
             except Exception as e:
                 print(f"{command}: command not found")
 
