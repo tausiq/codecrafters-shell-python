@@ -17,6 +17,13 @@ def main():
             message = command[5:]
             # Print the message
             print(message)
+        elif command.startswith('type'):
+            command = command[5:]
+            # Check if the command is "exit"
+            if command == 'echo' or command == 'exit' or command == 'type':
+                print(f"{command} is a shell builtin")
+            else: 
+                print(f"{command}: not found")
         else: 
             print(f"{command}: command not found")
 
