@@ -39,6 +39,8 @@ def main():
             dir_to_change = command[3:].strip()
             # Change the current working directory
             try:
+                if dir_to_change == '~': 
+                    dir_to_change = os.path.expanduser('~')
                 os.chdir(dir_to_change)
             except FileNotFoundError:
                 print(f"cd: {dir_to_change}: No such file or directory")
