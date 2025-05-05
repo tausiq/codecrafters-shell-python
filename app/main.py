@@ -8,13 +8,29 @@ import readline  # Add this import
 
 def setup_autocomplete():
     """Set up command autocompletion for the shell"""
-    # List of commands that should have autocompletion
-    commands = ['echo', 'exit']
+    # List of built-in commands
+    builtin_commands = ['echo', 'exit', 'type', 'pwd', 'cd']
+    
+    # Get commands from PATH
+    path_commands = []
+    for path_dir in os.environ.get('PATH', '').split(':'):
+        if os.path.isdir(path_dir):
+            try:
+                for file in os.listdir(path_dir):
+                    file_path = os.path.join(path_dir, file)
+                    if os.access(file_path, os.X_OK) and os.path.isfile(file_path):
+                        path_commands.append(file)
+            except (PermissionError, FileNotFoundError):
+                # Skip directories we can't access
+                pass
+    
+    # Combine built-in and PATH commands (remove duplicates)
+    all_commands = list(set(builtin_commands + path_commands))
     
     def completer(text, state):
         """Autocomplete function for readline"""
         # Filter commands that match the current text
-        options = [cmd + ' ' for cmd in commands if cmd.startswith(text)]
+        options = [cmd + ' ' for cmd in all_commands if cmd.startswith(text)]
 
         if state < len(options):
             return options[state]
