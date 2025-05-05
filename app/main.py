@@ -3,7 +3,27 @@ import os
 import shlex
 import shutil
 import subprocess
+import readline  # Add this import
 
+
+def setup_autocomplete():
+    """Set up command autocompletion for the shell"""
+    # List of commands that should have autocompletion
+    commands = ['echo', 'exit']
+    
+    def completer(text, state):
+        """Autocomplete function for readline"""
+        # Filter commands that match the current text
+        options = [cmd + ' ' for cmd in commands if cmd.startswith(text)]
+
+        if state < len(options):
+            return options[state]
+        else:
+            return None
+    
+    # Register the completer function
+    readline.parse_and_bind("tab: complete")
+    readline.set_completer(completer)
 
 def execute_echo(args):
     """Handle the echo command"""
@@ -68,6 +88,9 @@ def execute_external_command(command, args):
 
 def main():
     """Main shell loop"""
+    # Set up autocompletion
+    setup_autocomplete()
+
     while True:
         # Display prompt
         sys.stdout.write("$ ")
