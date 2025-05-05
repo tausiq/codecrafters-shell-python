@@ -84,22 +84,51 @@ def main():
         # Skip empty commands
         if not command_line.strip():
             continue
-
-        # Use shlex to parse the command line properly with quotes
-        try:
-            # Parse with quote awareness first
-            parts = shlex.split(command_line.strip(), posix=True)
-            if not parts:
-                continue
+            
+        # Handle redirection before parsing with shlex
+        output_file = None
+        if ' > ' in command_line or ' 1> ' in command_line:
+            # Split by redirection operator
+            if ' > ' in command_line:
+                cmd_parts = command_line.split(' > ', 1)
+            else:
+                cmd_parts = command_line.split(' 1> ', 1)
                 
-            command = parts[0]
-            args = parts[1:]
+            command_line = cmd_parts[0]
+            if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                output_file = cmd_parts[1].strip()
 
-            # Handle built-in commands
+
+        # Parse with quote awareness
+        parts = shlex.split(command_line.strip(), posix=True)
+        if not parts:
+            continue
+            
+        command = parts[0]
+        args = parts[1:]
+
+        # Handle redirected output
+        original_stdout = None
+        file_handle = None
+        
+        if output_file:
+            # Save original stdout
+            original_stdout = sys.stdout
+            # Open file for writing
+            file_handle = open(output_file, 'w')
+            # Redirect stdout to file
+            sys.stdout = file_handle
+
+        try:
+            # Execute the command with redirected output if applicable
             if command == "exit" and len(args) == 1 and args[0] == "0":
+                if file_handle:
+                    file_handle.close()
+                if original_stdout:
+                    sys.stdout = original_stdout
                 break
             elif command == "echo":
-                execute_echo(args)  # Use the existing function
+                execute_echo(args)
             elif command == "type":
                 execute_type(args)
             elif command == "pwd":
@@ -109,9 +138,13 @@ def main():
             else:
                 # Try to execute as external command
                 execute_external_command(command, args)
-        except ValueError:
-            # Handle unclosed quotes
-            print(f"Syntax error: unclosed quotes")
+        finally:
+            # Restore stdout if it was redirected
+            if file_handle:
+                file_handle.close()
+            if original_stdout:
+                sys.stdout = original_stdout
+
 
 
 if __name__ == "__main__":
