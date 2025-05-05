@@ -1,13 +1,13 @@
 import sys
 import os
+import shlex
 import shutil
 import subprocess
 
 
 def execute_echo(args):
     """Handle the echo command"""
-    message = ' '.join(args)
-    print(message)
+    print(" ".join(args))
 
 
 def execute_type(args):
@@ -85,28 +85,33 @@ def main():
         if not command_line.strip():
             continue
 
-        # Parse command and arguments
-        parts = command_line.strip().split()
-        if not parts:
-            continue
-            
-        command = parts[0]
-        args = parts[1:]
+        # Use shlex to parse the command line properly with quotes
+        try:
+            # Parse with quote awareness first
+            parts = shlex.split(command_line.strip(), posix=True)
+            if not parts:
+                continue
+                
+            command = parts[0]
+            args = parts[1:]
 
-        # Handle built-in commands
-        if command == "exit" and len(args) == 1 and args[0] == "0":
-            break
-        elif command == "echo":
-            execute_echo(args)
-        elif command == "type":
-            execute_type(args)
-        elif command == "pwd":
-            print(os.getcwd())
-        elif command == "cd":
-            execute_cd(args)
-        else:
-            # Try to execute as external command
-            execute_external_command(command, args)
+            # Handle built-in commands
+            if command == "exit" and len(args) == 1 and args[0] == "0":
+                break
+            elif command == "echo":
+                execute_echo(args)  # Use the existing function
+            elif command == "type":
+                execute_type(args)
+            elif command == "pwd":
+                print(os.getcwd())
+            elif command == "cd":
+                execute_cd(args)
+            else:
+                # Try to execute as external command
+                execute_external_command(command, args)
+        except ValueError:
+            # Handle unclosed quotes
+            print(f"Syntax error: unclosed quotes")
 
 
 if __name__ == "__main__":
