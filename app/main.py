@@ -87,6 +87,16 @@ def main():
             
         # Handle redirection before parsing with shlex
         output_file = None
+        error_file = None
+        
+        # Check for stderr redirection (2>)
+        if ' 2> ' in command_line:
+            cmd_parts = command_line.split(' 2> ', 1)
+            command_line = cmd_parts[0]
+            if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                error_file = cmd_parts[1].strip()
+        
+        # Check for stdout redirection (> or 1>)
         if ' > ' in command_line or ' 1> ' in command_line:
             # Split by redirection operator
             if ' > ' in command_line:
@@ -98,7 +108,6 @@ def main():
             if len(cmd_parts) > 1 and cmd_parts[1].strip():
                 output_file = cmd_parts[1].strip()
 
-
         # Parse with quote awareness
         parts = shlex.split(command_line.strip(), posix=True)
         if not parts:
@@ -109,23 +118,25 @@ def main():
 
         # Handle redirected output
         original_stdout = None
-        file_handle = None
+        original_stderr = None
+        stdout_file = None
+        stderr_file = None
         
-        if output_file:
-            # Save original stdout
-            original_stdout = sys.stdout
-            # Open file for writing
-            file_handle = open(output_file, 'w')
-            # Redirect stdout to file
-            sys.stdout = file_handle
-
         try:
+            # Redirect stdout if specified
+            if output_file:
+                original_stdout = sys.stdout
+                stdout_file = open(output_file, 'w')
+                sys.stdout = stdout_file
+                
+            # Redirect stderr if specified
+            if error_file:
+                original_stderr = sys.stderr
+                stderr_file = open(error_file, 'w')
+                sys.stderr = stderr_file
+
             # Execute the command with redirected output if applicable
             if command == "exit" and len(args) == 1 and args[0] == "0":
-                if file_handle:
-                    file_handle.close()
-                if original_stdout:
-                    sys.stdout = original_stdout
                 break
             elif command == "echo":
                 execute_echo(args)
@@ -140,10 +151,16 @@ def main():
                 execute_external_command(command, args)
         finally:
             # Restore stdout if it was redirected
-            if file_handle:
-                file_handle.close()
+            if stdout_file:
+                stdout_file.close()
             if original_stdout:
                 sys.stdout = original_stdout
+                
+            # Restore stderr if it was redirected
+            if stderr_file:
+                stderr_file.close()
+            if original_stderr:
+                sys.stderr = original_stderr
 
 
 
