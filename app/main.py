@@ -88,16 +88,37 @@ def main():
         # Handle redirection before parsing with shlex
         output_file = None
         error_file = None
+        stdout_append = False
+        stderr_append = False
         
+        # Check for stderr append redirection (2>>)
+        if ' 2>> ' in command_line:
+            cmd_parts = command_line.split(' 2>> ', 1)
+            command_line = cmd_parts[0]
+            if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                error_file = cmd_parts[1].strip()
+                stderr_append = True
         # Check for stderr redirection (2>)
-        if ' 2> ' in command_line:
+        elif ' 2> ' in command_line:
             cmd_parts = command_line.split(' 2> ', 1)
             command_line = cmd_parts[0]
             if len(cmd_parts) > 1 and cmd_parts[1].strip():
                 error_file = cmd_parts[1].strip()
         
+        # Check for stdout append redirection (>> or 1>>)
+        if ' >> ' in command_line or ' 1>> ' in command_line:
+            # Split by redirection operator
+            if ' >> ' in command_line:
+                cmd_parts = command_line.split(' >> ', 1)
+            else:
+                cmd_parts = command_line.split(' 1>> ', 1)
+                
+            command_line = cmd_parts[0]
+            if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                output_file = cmd_parts[1].strip()
+                stdout_append = True
         # Check for stdout redirection (> or 1>)
-        if ' > ' in command_line or ' 1> ' in command_line:
+        elif ' > ' in command_line or ' 1> ' in command_line:
             # Split by redirection operator
             if ' > ' in command_line:
                 cmd_parts = command_line.split(' > ', 1)
@@ -126,13 +147,17 @@ def main():
             # Redirect stdout if specified
             if output_file:
                 original_stdout = sys.stdout
-                stdout_file = open(output_file, 'w')
+                # Use append mode if >> was used, otherwise use write mode
+                mode = 'a' if stdout_append else 'w'
+                stdout_file = open(output_file, mode)
                 sys.stdout = stdout_file
                 
             # Redirect stderr if specified
             if error_file:
                 original_stderr = sys.stderr
-                stderr_file = open(error_file, 'w')
+                # Use append mode if 2>> was used, otherwise use write mode
+                mode = 'a' if stderr_append else 'w'
+                stderr_file = open(error_file, mode)
                 sys.stderr = stderr_file
 
             # Execute the command with redirected output if applicable
