@@ -27,13 +27,45 @@ def setup_autocomplete():
     # Combine built-in and PATH commands (remove duplicates)
     all_commands = list(set(builtin_commands + path_commands))
     
+    # Variables to track tab presses and previous text
+    tab_count = [0]
+    last_text = [""]
+    
     def completer(text, state):
         """Autocomplete function for readline"""
+        # If text changed, reset tab count
+        if text != last_text[0]:
+            tab_count[0] = 0
+            last_text[0] = text
+        
         # Filter commands that match the current text
-        options = [cmd + ' ' for cmd in all_commands if cmd.startswith(text)]
-
-        if state < len(options):
-            return options[state]
+        matches = [cmd for cmd in all_commands if cmd.startswith(text)]
+        
+        # Handle matched commands
+        if len(matches) == 1:
+            # Single match - return with a space
+            return matches[0] + " " if state == 0 else None
+        elif len(matches) > 1:
+            # Multiple matches
+            if state == 0:
+                # First tab press - increment count and ring bell
+                tab_count[0] += 1
+                if tab_count[0] == 1:
+                    sys.stdout.write('\a')
+                    sys.stdout.flush()
+                    return None
+                # Second tab press - display all matches
+                elif tab_count[0] >= 2:
+                    print()
+                    print("  ".join(sorted(matches)))
+                    print(f"$ {readline.get_line_buffer()}", end='')
+                    sys.stdout.flush()
+                    return None
+            # Return the actual completion on subsequent state values
+            state_idx = state
+            if state_idx < len(matches):
+                return matches[state_idx] + " "
+            return None
         else:
             return None
     
@@ -82,6 +114,12 @@ def execute_cd(args):
 def execute_external_command(command, args):
     """Execute an external command with arguments"""
     try:
+        # Find the full path of the command
+        command_path = shutil.which(command)
+        if not command_path:
+            print(f"{command}: command not found")
+            return 127
+            
         # Execute the command and capture output
         result = subprocess.run([command] + args, capture_output=True, text=True)
         
