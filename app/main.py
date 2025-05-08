@@ -31,6 +31,18 @@ def setup_autocomplete():
     tab_count = [0]
     last_text = [""]
     
+    def find_longest_common_prefix(strings):
+        """Find the longest common prefix of a list of strings"""
+        if not strings:
+            return ""
+        
+        shortest = min(strings, key=len)
+        for i, char in enumerate(shortest):
+            for other in strings:
+                if other[i] != char:
+                    return shortest[:i]
+        return shortest
+    
     def completer(text, state):
         """Autocomplete function for readline"""
         # If text changed, reset tab count
@@ -46,7 +58,15 @@ def setup_autocomplete():
             # Single match - return with a space
             return matches[0] + " " if state == 0 else None
         elif len(matches) > 1:
-            # Multiple matches
+            # Find the longest common prefix
+            common_prefix = find_longest_common_prefix(matches)
+            
+            # If we can extend the current text, do it without showing options
+            if len(common_prefix) > len(text):
+                # Don't add a space so user can keep typing
+                return common_prefix if state == 0 else None
+                
+            # If we can't extend (user already typed the common prefix)
             if state == 0:
                 # First tab press - increment count and ring bell
                 tab_count[0] += 1
