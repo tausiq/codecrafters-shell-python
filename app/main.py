@@ -178,111 +178,221 @@ def main():
             print()
             break
 
+        # Check for exit command before pipeline processing
+        command_line = command_line.strip()
+        if command_line == "exit 0":
+            break
+
         # Skip empty commands
-        if not command_line.strip():
+        if not command_line:
             continue
             
-        # Handle redirection before parsing with shlex
-        output_file = None
-        error_file = None
-        stdout_append = False
-        stderr_append = False
+        # Split the command line by pipes to handle pipelines
+        pipeline = [cmd.strip() for cmd in command_line.split(' | ')]
         
-        # Check for stderr append redirection (2>>)
-        if ' 2>> ' in command_line:
-            cmd_parts = command_line.split(' 2>> ', 1)
-            command_line = cmd_parts[0]
-            if len(cmd_parts) > 1 and cmd_parts[1].strip():
-                error_file = cmd_parts[1].strip()
-                stderr_append = True
-        # Check for stderr redirection (2>)
-        elif ' 2> ' in command_line:
-            cmd_parts = command_line.split(' 2> ', 1)
-            command_line = cmd_parts[0]
-            if len(cmd_parts) > 1 and cmd_parts[1].strip():
-                error_file = cmd_parts[1].strip()
+        # Process each command in the pipeline
+        processes = []
+        prev_pipe = None
         
-        # Check for stdout append redirection (>> or 1>>)
-        if ' >> ' in command_line or ' 1>> ' in command_line:
-            # Split by redirection operator
-            if ' >> ' in command_line:
-                cmd_parts = command_line.split(' >> ', 1)
-            else:
-                cmd_parts = command_line.split(' 1>> ', 1)
-                
-            command_line = cmd_parts[0]
-            if len(cmd_parts) > 1 and cmd_parts[1].strip():
-                output_file = cmd_parts[1].strip()
-                stdout_append = True
-        # Check for stdout redirection (> or 1>)
-        elif ' > ' in command_line or ' 1> ' in command_line:
-            # Split by redirection operator
-            if ' > ' in command_line:
-                cmd_parts = command_line.split(' > ', 1)
-            else:
-                cmd_parts = command_line.split(' 1> ', 1)
-                
-            command_line = cmd_parts[0]
-            if len(cmd_parts) > 1 and cmd_parts[1].strip():
-                output_file = cmd_parts[1].strip()
-
-        # Parse with quote awareness
-        parts = shlex.split(command_line.strip(), posix=True)
-        if not parts:
-            continue
+        # Handle each command in the pipeline
+        for i, cmd in enumerate(pipeline):
+            is_last = i == len(pipeline) - 1
             
-        command = parts[0]
-        args = parts[1:]
-
-        # Handle redirected output
-        original_stdout = None
-        original_stderr = None
-        stdout_file = None
-        stderr_file = None
-        
-        try:
-            # Redirect stdout if specified
-            if output_file:
-                original_stdout = sys.stdout
-                # Use append mode if >> was used, otherwise use write mode
-                mode = 'a' if stdout_append else 'w'
-                stdout_file = open(output_file, mode)
-                sys.stdout = stdout_file
+            # Handle redirection for this command
+            output_file = None
+            error_file = None
+            stdout_append = False
+            stderr_append = False
+            
+            # Only process redirections for the last command in the pipeline
+            if is_last:
+                # Check for stderr append redirection (2>>)
+                if ' 2>> ' in cmd:
+                    cmd_parts = cmd.split(' 2>> ', 1)
+                    cmd = cmd_parts[0]
+                    if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                        error_file = cmd_parts[1].strip()
+                        stderr_append = True
+                # Check for stderr redirection (2>)
+                elif ' 2> ' in cmd:
+                    cmd_parts = cmd.split(' 2> ', 1)
+                    cmd = cmd_parts[0]
+                    if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                        error_file = cmd_parts[1].strip()
                 
-            # Redirect stderr if specified
-            if error_file:
-                original_stderr = sys.stderr
-                # Use append mode if 2>> was used, otherwise use write mode
-                mode = 'a' if stderr_append else 'w'
-                stderr_file = open(error_file, mode)
-                sys.stderr = stderr_file
+                # Check for stdout append redirection (>> or 1>>)
+                if ' >> ' in cmd or ' 1>> ' in cmd:
+                    # Split by redirection operator
+                    if ' >> ' in cmd:
+                        cmd_parts = cmd.split(' >> ', 1)
+                    else:
+                        cmd_parts = cmd.split(' 1>> ', 1)
+                        
+                    cmd = cmd_parts[0]
+                    if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                        output_file = cmd_parts[1].strip()
+                        stdout_append = True
+                # Check for stdout redirection (> or 1>)
+                elif ' > ' in cmd or ' 1> ' in cmd:
+                    # Split by redirection operator
+                    if ' > ' in cmd:
+                        cmd_parts = cmd.split(' > ', 1)
+                    else:
+                        cmd_parts = cmd.split(' 1> ', 1)
+                        
+                    cmd = cmd_parts[0]
+                    if len(cmd_parts) > 1 and cmd_parts[1].strip():
+                        output_file = cmd_parts[1].strip()
 
-            # Execute the command with redirected output if applicable
+            # Parse with quote awareness
+            parts = shlex.split(cmd.strip(), posix=True)
+            if not parts:
+                continue
+                
+            command = parts[0]
+            args = parts[1:]
+
+            # Handle built-in commands
             if command == "exit" and len(args) == 1 and args[0] == "0":
+                # Clean up any processes
+                for p in processes:
+                    if p.poll() is None:
+                        p.terminate()
                 break
-            elif command == "echo":
-                execute_echo(args)
-            elif command == "type":
-                execute_type(args)
-            elif command == "pwd":
-                print(os.getcwd())
-            elif command == "cd":
-                execute_cd(args)
-            else:
-                # Try to execute as external command
-                execute_external_command(command, args)
-        finally:
-            # Restore stdout if it was redirected
-            if stdout_file:
-                stdout_file.close()
-            if original_stdout:
-                sys.stdout = original_stdout
+
+            # For built-in commands in a pipeline, we need to capture their output
+            if command in ["echo", "type", "pwd", "cd"]:
+                # Create pipes for stdin and stdout
+                if prev_pipe:
+                    stdin_source = prev_pipe
+                else:
+                    stdin_source = subprocess.PIPE
                 
-            # Restore stderr if it was redirected
-            if stderr_file:
-                stderr_file.close()
-            if original_stderr:
-                sys.stderr = original_stderr
+                # For the last command, we may need to redirect
+                if is_last and not output_file and not error_file:
+                    stdout_dest = None  # Terminal
+                else:
+                    stdout_dest = subprocess.PIPE
+
+                # Create a new pipe for the next command
+                if not is_last:
+                    next_pipe_read, next_pipe_write = os.pipe()
+                    stdout_dest = next_pipe_write
+                else:
+                    next_pipe_read = None
+
+                # Capture built-in command output
+                output = None
+                
+                # Handle redirected output
+                original_stdout = None
+                original_stderr = None
+                stdout_file = None
+                stderr_file = None
+                
+                try:
+                    # Redirect stdout if specified and this is the last command
+                    if is_last and output_file:
+                        original_stdout = sys.stdout
+                        # Use append mode if >> was used, otherwise use write mode
+                        mode = 'a' if stdout_append else 'w'
+                        stdout_file = open(output_file, mode)
+                        sys.stdout = stdout_file
+                        
+                    # Redirect stderr if specified and this is the last command
+                    if is_last and error_file:
+                        original_stderr = sys.stderr
+                        # Use append mode if 2>> was used, otherwise use write mode
+                        mode = 'a' if stderr_append else 'w'
+                        stderr_file = open(error_file, mode)
+                        sys.stderr = stderr_file
+
+                    # Execute built-in command
+                    if command == "echo":
+                        execute_echo(args)
+                    elif command == "type":
+                        execute_type(args)
+                    elif command == "pwd":
+                        print(os.getcwd())
+                    elif command == "cd":
+                        execute_cd(args)
+                        
+                finally:
+                    # Restore stdout if it was redirected
+                    if stdout_file:
+                        stdout_file.close()
+                    if original_stdout:
+                        sys.stdout = original_stdout
+                        
+                    # Restore stderr if it was redirected
+                    if stderr_file:
+                        stderr_file.close()
+                    if original_stderr:
+                        sys.stderr = original_stderr
+                        
+                prev_pipe = next_pipe_read
+            else:
+                # Execute external command with pipeline
+                
+                # Set up stdin - connect to previous pipe if not the first command
+                if prev_pipe:
+                    stdin_source = prev_pipe
+                else:
+                    stdin_source = subprocess.PIPE
+                
+                # Set up stdout - create a pipe if not the last command
+                if not is_last:
+                    stdout_dest = subprocess.PIPE
+                else:
+                    # For the last command, set up redirections if needed
+                    if output_file:
+                        mode = 'a' if stdout_append else 'w'
+                        stdout_file = open(output_file, mode)
+                        stdout_dest = stdout_file
+                    else:
+                        stdout_dest = None  # Terminal
+                
+                # Set up stderr redirection
+                if error_file:
+                    mode = 'a' if stderr_append else 'w'
+                    stderr_file = open(error_file, mode)
+                    stderr_dest = stderr_file
+                else:
+                    stderr_dest = None  # Terminal
+                
+                # Find the full path of the command
+                # command_path = shutil.which(command)
+                # if not command_path:
+                #     print(f"{command}: command not found")
+                #     break
+                
+                # Create the process
+                try:
+                    process = subprocess.Popen(
+                        [command] + args,
+                        stdin=stdin_source,
+                        stdout=stdout_dest,
+                        stderr=stderr_dest,
+                        text=True
+                    )
+                    processes.append(process)
+                    
+                    # Store pipe file descriptor for next command
+                    prev_pipe = process.stdout
+                except Exception as e:
+                    print(f"{command}: command not found", file=sys.stderr)
+                    break
+        
+        # Wait for all processes to finish
+        for process in processes:
+            process.wait()
+        
+        # Close any open file descriptors
+        for process in processes:
+            if process.stdout:
+                process.stdout.close()
+            if process.stderr:
+                process.stderr.close()
 
 
 
