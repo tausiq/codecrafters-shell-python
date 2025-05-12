@@ -3,7 +3,9 @@ import os
 import shlex
 import shutil
 import subprocess
-import readline  # Add this import
+import readline
+import io 
+import tempfile
 
 
 def setup_autocomplete():
@@ -262,51 +264,17 @@ def main():
 
             # For built-in commands in a pipeline, we need to capture their output
             if command in ["echo", "type", "pwd", "cd"]:
-                # Create pipes for stdin and stdout
-                if prev_pipe:
-                    stdin_source = prev_pipe
-                else:
-                    stdin_source = subprocess.PIPE
-                
-                # For the last command, we may need to redirect
-                if is_last and not output_file and not error_file:
-                    stdout_dest = None  # Terminal
-                else:
-                    stdout_dest = subprocess.PIPE
-
-                # Create a new pipe for the next command
-                if not is_last:
-                    next_pipe_read, next_pipe_write = os.pipe()
-                    stdout_dest = next_pipe_write
-                else:
-                    next_pipe_read = None
-
-                # Capture built-in command output
-                output = None
-                
-                # Handle redirected output
-                original_stdout = None
-                original_stderr = None
-                stdout_file = None
-                stderr_file = None
+                # Prepare to capture the output
+                output_stream = io.StringIO()
+                error_stream = io.StringIO()  # Add error stream capture
+                original_stdout = sys.stdout
+                original_stderr = sys.stderr  # Save original stderr
                 
                 try:
-                    # Redirect stdout if specified and this is the last command
-                    if is_last and output_file:
-                        original_stdout = sys.stdout
-                        # Use append mode if >> was used, otherwise use write mode
-                        mode = 'a' if stdout_append else 'w'
-                        stdout_file = open(output_file, mode)
-                        sys.stdout = stdout_file
-                        
-                    # Redirect stderr if specified and this is the last command
-                    if is_last and error_file:
-                        original_stderr = sys.stderr
-                        # Use append mode if 2>> was used, otherwise use write mode
-                        mode = 'a' if stderr_append else 'w'
-                        stderr_file = open(error_file, mode)
-                        sys.stderr = stderr_file
-
+                    # Redirect stdout and stderr to our string buffers
+                    sys.stdout = output_stream
+                    sys.stderr = error_stream  # Redirect stderr
+                    
                     # Execute built-in command
                     if command == "echo":
                         execute_echo(args)
@@ -317,20 +285,49 @@ def main():
                     elif command == "cd":
                         execute_cd(args)
                         
-                finally:
-                    # Restore stdout if it was redirected
-                    if stdout_file:
-                        stdout_file.close()
-                    if original_stdout:
+                    # Get the captured output
+                    captured_output = output_stream.getvalue()
+                    captured_error = error_stream.getvalue()  # Get captured stderr
+                    
+                    # If this is the last command, handle outputs
+                    if is_last:
+                        # Restore original stdout and stderr
                         sys.stdout = original_stdout
-                        
-                    # Restore stderr if it was redirected
-                    if stderr_file:
-                        stderr_file.close()
-                    if original_stderr:
                         sys.stderr = original_stderr
                         
-                prev_pipe = next_pipe_read
+                        # Handle file redirection for stdout if needed
+                        if output_file:
+                            mode = 'a' if stdout_append else 'w'
+                            with open(output_file, mode) as f:
+                                f.write(captured_output)
+                        else:
+                            # Print to console
+                            print(captured_output, end='')
+                            
+                        # Handle file redirection for stderr if needed
+                        if error_file:
+                            mode = 'a' if stderr_append else 'w'
+                            with open(error_file, mode) as f:
+                                f.write(captured_error)
+                        elif captured_error:  # Only print if there are errors
+                            print(captured_error, end='', file=sys.stderr)
+                    else:
+                        # This is not the last command, feed output to next command
+                        # Create a temporary file to store the output
+                        sys.stdout = original_stdout
+                        sys.stderr = original_stderr
+                        temp_file = tempfile.TemporaryFile(mode='w+t')
+                        temp_file.write(captured_output)
+                        temp_file.seek(0)  # Rewind to start of file
+                        
+                        # Set as stdin for the next command
+                        prev_pipe = temp_file
+                finally:
+                    # Always restore stdout and stderr
+                    sys.stdout = original_stdout
+                    sys.stderr = original_stderr
+                    output_stream.close()
+                    error_stream.close()  # Close error stream
             else:
                 # Execute external command with pipeline
                 
@@ -338,7 +335,7 @@ def main():
                 if prev_pipe:
                     stdin_source = prev_pipe
                 else:
-                    stdin_source = subprocess.PIPE
+                    stdin_source = None
                 
                 # Set up stdout - create a pipe if not the last command
                 if not is_last:
@@ -359,12 +356,7 @@ def main():
                     stderr_dest = stderr_file
                 else:
                     stderr_dest = None  # Terminal
-                
-                # Find the full path of the command
-                # command_path = shutil.which(command)
-                # if not command_path:
-                #     print(f"{command}: command not found")
-                #     break
+            
                 
                 # Create the process
                 try:
