@@ -376,30 +376,15 @@ def execute_pipeline(pipeline):
 
 def main():
     """Main shell loop"""
-    # Set up autocompletion
+
+    # Setup autocompletion before entering the loop
     setup_autocomplete()
 
     while True:
         # Display prompt
         sys.stdout.write("$ ")
-        sys.stdout.flush()
+        command_line = input()
 
-        # Get command input
-        try:
-            command_line = input()
-        except EOFError:
-            # Handle Ctrl+D gracefully
-            print()
-            break
-
-        # Check for exit command before pipeline processing
-        command_line = command_line.strip()
-        if command_line == "exit 0":
-            break
-
-        # Skip empty commands
-        if not command_line:
-            continue
             
         # Split the command line by pipes to handle pipelines
         pipeline = [cmd.strip() for cmd in command_line.split(' | ')]
